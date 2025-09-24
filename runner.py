@@ -3,12 +3,16 @@ from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from torchvision.ops import sigmoid_focal_loss
+from torch import nn
+import logging
 
 def train_model(model, train_dataloader, optimizer, scheduler, test_dataloader, participant_id, epochs=10):
+    logging.info("Start training now...")
     model.train()
     cur_date = datetime.now().strftime('%Y%m%d_%H%M%S')
     log_dir = f'./work_dir/tensorboards/{cur_date}_epochs{epochs}_lr{optimizer.param_groups[0]["lr"]}'
     writer = SummaryWriter(log_dir)
+    criterion = nn.BCEWithLogitsLoss()  
     
     for epoch in range(epochs):
         model.train()  # 训练模式
@@ -22,13 +26,15 @@ def train_model(model, train_dataloader, optimizer, scheduler, test_dataloader, 
             # 前向传播
             outputs = model(inputs, seq_lengths)
             outputs = outputs.view(-1)
-            loss = sigmoid_focal_loss(
-                outputs,         # 输入 logits
-                labels,          # 目标标签
-                alpha=0.25,      # 平衡因子，默认值可调整
-                gamma=2.0,       # 调整难易样本的参数，默认值可调整
-                reduction='mean' # 损失的聚合方式
-            )
+            # loss = sigmoid_focal_loss(
+            #     outputs,         # 输入 logits
+            #     labels,          # 目标标签
+            #     alpha=0.25,      # 平衡因子，默认值可调整
+            #     gamma=2.0,       # 调整难易样本的参数，默认值可调整
+            #     reduction='mean' # 损失的聚合方式
+            # )
+            
+            loss = criterion(outputs, labels)
             
             # 反向传播与优化
             optimizer.zero_grad()
@@ -39,7 +45,7 @@ def train_model(model, train_dataloader, optimizer, scheduler, test_dataloader, 
         scheduler.step()
         # 记录训练损失
         writer.add_scalar('Loss/train', running_loss / len(train_dataloader), epoch)
-        print(f"Epoch [{epoch+1}/{epochs}], Loss: {running_loss / len(train_dataloader):.4f}")
+        logging.info(f"Epoch [{epoch+1}/{epochs}], Loss: {running_loss / len(train_dataloader):.4f}")
         
         # 训练一个 epoch 后立即进行评估
         evaluate_model(model, test_dataloader, participant_id, writer, epoch)
@@ -50,6 +56,9 @@ def evaluate_model(model, test_dataloader, participant_id, writer, epoch, single
     model.eval()  # 评估模式
     total = 0
     correct = 0
+    total_pred_pos = 0
+    total_pred_neg = 0
+
 
     TP = 0  
     FP = 0  
@@ -82,6 +91,9 @@ def evaluate_model(model, test_dataloader, participant_id, writer, epoch, single
             TN += ((predicted == 0) & (labels == 0)).sum().item()
             FN += ((predicted == 0) & (labels == 1)).sum().item()
 
+            total_pred_pos += (predicted == 1).sum().item()
+            total_pred_neg += (predicted == 0).sum().item()
+
     # 计算评估的平均损失
     eval_loss = running_loss / len(test_dataloader)
     writer.add_scalar('Loss/eval', eval_loss, epoch)  # 记录评估损失到TensorBoard
@@ -92,6 +104,9 @@ def evaluate_model(model, test_dataloader, participant_id, writer, epoch, single
     f1_score = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
 
     if single:
-        print(f'{participant_id} test Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1_score:.4f}')
+        logging.info(f'{participant_id} test Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1_score:.4f}')
     else:
-        print(f'Overall accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1_score:.4f}')
+        logging.info(f'Overall accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1 Score: {f1_score:.4f}')
+
+    logging.info(f'TP:{TP}, FP:{FP}, TN:{TN}, FN:{FN}')
+    logging.info(f"predicted 1: {total_pred_pos}, predicted 0: {total_pred_neg}")

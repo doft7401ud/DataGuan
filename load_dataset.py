@@ -2,9 +2,10 @@ import json
 import torch
 from torch.utils.data import Dataset
 import pandas as pd
+import random
 
 class ds_smarteye(Dataset):
-    def __init__(self, json_path, participant_id, train=True, split_ratio=0.9):
+    def __init__(self, json_path, participant_id, train=True, split_ratio=0.75):
         """
         json_path: 存放标签和数据的 JSON 文件路径
         participant_id: 实验者编号，例如 'Participant_1'
@@ -24,27 +25,12 @@ class ds_smarteye(Dataset):
         
         # 读取数据和对应的标签
         for experiment_info in participant_data:
-            data = pd.read_csv(f'.\\final\\{experiment_info['experiment']}')
+            data = pd.read_csv(f'/mnt/data/r-zhao/final/{experiment_info['experiment']}')
             columns_to_keep = [
-                '6', 
-                '7', 
-                '8', 
-                '9', 
-                '10', 
-                '11', 
-                '15', 
-                '20',
-                'Blink',
-                'EyelidOpeningChange',
-                'EyelidOpening',
-                'Fixationrecalculated(20240104)',
                 'GazeDirectionX',
-                'GazeDirectionY',
                 'GazeObjectsrecalculated(Reidentified+gapfilled)',
                 'movingGazeRatioeachLaneChange',
                 'PupilDiameterChange',
-                'PupilDiameter',
-                'Saccaderecalculated(20231231)'
             ]
             # 选择指定的列
             data = data[columns_to_keep]
@@ -55,6 +41,11 @@ class ds_smarteye(Dataset):
 
         # 根据 split_ratio 划分数据
         split_index = int(len(self.data) * split_ratio)
+        combined = list(zip(self.data, self.labels))
+        random.shuffle(combined)
+        self.data, self.labels = zip(*combined)
+        self.data = list(self.data)
+        self.labels = list(self.labels)
         if train:
             self.data = self.data[:split_index]  # 训练集
             self.labels = self.labels[:split_index]  # 对应训练集的标签
