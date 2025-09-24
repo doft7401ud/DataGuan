@@ -7,8 +7,8 @@ def count_labels(data, max_participant=43):
     for participant_key in data:
         if participant_key.startswith("Participant_"):
             participant_num = int(participant_key.split("_")[1])
-            if participant_num > max_participant:
-                continue  # 只统计到 Participant_37
+            # if participant_num > max_participant:
+            #     continue  # 只统计到 Participant_37
 
             experiments = data[participant_key]
             for experiment in experiments:
@@ -22,7 +22,7 @@ def count_labels(data, max_participant=43):
 
 if __name__ == "__main__":
     # 读取 JSON 数据
-    with open(".\\label_1.json", "r") as file:
+    with open(".\\label_2.json", "r") as file:
         data = json.load(file)
 
     true_count, false_count = count_labels(data)

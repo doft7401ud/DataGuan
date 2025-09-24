@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from load_dataset import ds_smarteye
+import torch.nn.init as init
 from torch.nn.utils.rnn import pad_sequence
 import math
 
@@ -12,7 +13,7 @@ def collate_fn(batch):
     padded_data = pad_sequence(data, batch_first=True)
     
     labels = torch.stack(labels)
-    
+
     return {
         'data': padded_data,
         'label': labels,
@@ -20,11 +21,28 @@ def collate_fn(batch):
     }
 
 class LSTMModel(nn.Module):
-    def __init__(self, input_size=19, hidden_size=64, num_layers=1):
+    def __init__(self, input_size=19, hidden_size=32, num_layers=1):
         super(LSTMModel, self).__init__()
         # self.fc1 = nn.Linear()
         self.lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size, num_layers=num_layers, batch_first=True)
         self.fc = nn.Linear(hidden_size, 1)
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            init.kaiming_normal_(module.weight, nonlinearity='linear')
+            if module.bias is not None:
+                init.constant_(module.bias, 0.0)
+
+        elif isinstance(module, nn.LSTM):
+            # LSTM 的参数命名比较特殊，需要分 named_parameters 看是 weight_ih, weight_hh 还是 bias
+            for name, param in module.named_parameters():
+                if 'weight_ih' in name:
+                    init.kaiming_normal_(param.data, nonlinearity='sigmoid')
+                elif 'weight_hh' in name:
+                    init.kaiming_normal_(param.data, nonlinearity='sigmoid')
+                elif 'bias' in name:
+                    init.constant_(param.data, 0.0)
 
     def forward(self, x, seq_lengths):
         packed_input = nn.utils.rnn.pack_padded_sequence(x, seq_lengths, batch_first=True, enforce_sorted=False)
@@ -60,7 +78,7 @@ class PositionalEncoding(nn.Module):
         return self.dropout(x)
 
 class TransformerModel(nn.Module):
-    def __init__(self, input_size=19, hidden_size=512, num_layers=1, nhead=64, dim_feedforward=2048, dropout=0.1):
+    def __init__(self, input_size=19, hidden_size=512, num_layers=4, nhead=64, dim_feedforward=512, dropout=0.1):
         super(TransformerModel, self).__init__()
         self.hidden_size = hidden_size
 
